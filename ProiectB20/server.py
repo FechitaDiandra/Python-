@@ -1,68 +1,84 @@
 import socket
 import threading
-import random
+from random import randint
 
-def verifica_castigator(opt_jucator, opt_server):
-    reguli = {
-        "rock": ["scissors", "lizard"],
-        "paper": ["rock", "spock"],
-        "scissors": ["paper", "lizard"],
-        "lizard": ["spock", "paper"],
-        "spock": ["scissors", "rock"]
-    }
-    if opt_jucator == opt_server:
-        return "draw"
-    elif opt_server in reguli[opt_jucator]:
-        return "win"
+options = ["rock", "paper", "scissors", "lizard", "spock"]
+
+def verifica_castigator(player, computer):
+    if player == computer:
+        return "tie!", None
+    elif player == "rock":
+        if computer in ["paper", "spock"]:
+            return "you lose!", False
+        else:
+            return "you win!", True
+    elif player == "paper":
+        if computer in ["scissors", "lizard"]:
+            return "you lose!", False
+        else:
+            return "you win!", True
+    elif player == "scissors":
+        if computer in ["rock", "spock"]:
+            return "you lose!", False
+        else:
+            return "you win!", True
+    elif player == "lizard":
+        if computer in ["rock", "scissors"]:
+            return "you lose!", False
+        else:
+            return "you win!", True
+    elif player == "spock":
+        if computer in ["paper", "lizard"]:
+            return "you lose!", False
+        else:
+            return "you win!", True
     else:
-        return "lose"
+        return "invalid play!", None
 
+def gestioneaza_client(client_socket, adresa):
+    print(f"client conectat de la {adresa}")
+    scor_jucator = 0
+    scor_server = 0
 
-def optiune_random():
-    return random.choice(["rock", "paper", "scissors", "lizard", "spock"])
-
-
-def gestioneaza_client(client_socket, adresa, id_jucator):
-    print(f"Jucător {id_jucator} conectat de la {adresa}")
-    while True:
+    while scor_jucator < 2 and scor_server < 2: 
         try:
-       
-            opt_jucator = client_socket.recv(1024).decode("utf-8")
-            if not opt_jucator:
+            player = client_socket.recv(1024).decode("utf-8").lower()
+            if not player:
                 break
 
-            if opt_jucator not in ["rock", "paper", "scissors", "lizard", "spock"]:
-                client_socket.send("Invalid option. Choose from: rock, paper, scissors, lizard, spock".encode("utf-8"))
+            if player not in options:
+                client_socket.send("invalid option. choose rock, paper, scissors, lizard, or spock.".encode("utf-8"))
                 continue
 
-            opt_server = optiune_random()
-            rezultat = verifica_castigator(opt_jucator, opt_server)
+            computer = options[randint(0, 4)]
+            print(f"jucatorul a ales: {player}, serverul a ales: {computer}")
 
-            mesaj = f"Player {id_jucator}: You chose {opt_jucator}, server chose {opt_server}. Result: {rezultat}"
+            rezultat, castigator = verifica_castigator(player, computer)
+            if castigator is True:
+                scor_jucator += 1
+            elif castigator is False:
+                scor_server += 1
+
+            mesaj = f"{rezultat} (player: {scor_jucator}, server: {scor_server})"
             client_socket.send(mesaj.encode("utf-8"))
-
-            if rezultat == "lose":
-                print(f"Jucător {id_jucator} a pierdut.")
-                break
-
         except Exception as e:
-            print(f"Eroare cu jucător {id_jucator}: {e}")
+            print(f"eroare cu clientul {adresa}: {e}")
             break
 
-    client_socket.close()
-    print(f"Conexiunea cu jucător {id_jucator} s-a închis.")
+    if scor_jucator == 2:
+        client_socket.send("game over! you win the match!".encode("utf-8"))
+    else:
+        client_socket.send("game over! you lose the match!".encode("utf-8"))
 
+    client_socket.close()
+    print(f"conexiunea cu clientul {adresa} s-a inchis.")
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(("127.0.0.1", 1234))
 server.listen(3)
-print("Serverul a pornit și ascultă conexiuni...")
+print("serverul a pornit si asculta conexiuni...")
 
-
-id_jucator = 0
 while True:
-    if threading.active_count() - 1 < 3: 
-        client_socket, adresa = server.accept()
-        id_jucator += 1
-        thread = threading.Thread(target=gestioneaza_client, args=(client_socket, adresa, id_jucator))
-        thread.start()
+    client_socket, adresa = server.accept()
+    thread = threading.Thread(target=gestioneaza_client, args=(client_socket, adresa))
+    thread.start()
